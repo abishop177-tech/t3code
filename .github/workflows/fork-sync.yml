@@ -64,7 +64,13 @@ jobs:
             files=$(git diff --name-only --diff-filter=U)
             git merge --abort
             body=$(printf 'Merging upstream `%s` into `fork` conflicts in:\n\n```\n%s\n```\n\nResolve locally:\n\n```sh\ngit switch fork && git pull\ngit fetch upstream tag %s\ngit merge %s\n```\n' "$tag" "$files" "$tag" "$tag")
-            gh issue create --title "Fork sync conflict: $tag" --body "$body"
+            # One open conflict issue at a time; later nightlies comment on it.
+            open=$(gh issue list --state open --search 'in:title "Fork sync conflict"' --json number -q '.[0].number')
+            if [ -n "$open" ]; then
+              gh issue comment "$open" --body "$body"
+            else
+              gh issue create --title "Fork sync conflict" --body "$body"
+            fi
             exit 1
           fi
           git push --force origin HEAD:refs/heads/sync/nightly
