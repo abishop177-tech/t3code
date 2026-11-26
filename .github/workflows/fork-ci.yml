@@ -84,6 +84,8 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y libsecret-1-dev pkg-config
       - uses: ./.github/actions/setup-ci-deps
       - run: vp run --filter @t3tools/desktop ensure:electron
+      # The server's browser-preview tests drive a real headless Chromium.
+      - run: node apps/server/node_modules/playwright-core/cli.js install --with-deps --only-shell chromium
       - run: vp run --filter '!@t3tools/web' --filter '!@t3tools/monorepo' test
 
   test_web:
