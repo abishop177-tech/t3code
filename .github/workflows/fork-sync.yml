@@ -90,14 +90,12 @@ jobs:
     if: needs.merge.outputs.sha != ''
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
-        with:
-          ref: ${{ needs.merge.outputs.sha }}
-          fetch-depth: 1
-          sparse-checkout: .github
-          token: ${{ secrets.FORK_SYNC_TOKEN }}
-      # Non-force: if someone pushed to fork mid-run, the next run merges again.
-      - run: git push origin HEAD:refs/heads/fork
+      # The API refuses non-fast-forward updates; if someone pushed to fork mid-run,
+      # the next run merges again.
+      - env:
+          GH_TOKEN: ${{ secrets.FORK_SYNC_TOKEN }}
+          SHA: ${{ needs.merge.outputs.sha }}
+        run: gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/heads/fork" -f sha="$SHA" -F force=false
 
   report:
     name: Report failure
@@ -112,5 +110,5 @@ jobs:
           TAG: ${{ needs.merge.outputs.tag }}
           RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          gh issue create -R "$GITHUB_REPOSITORY" --title "Fork sync failed CI: $TAG" \
-            --body "Upstream \`$TAG\` merged cleanly into \`sync/nightly\` but did not pass Fork CI, so \`fork\` was not updated. Run: $RUN"
+          gh issue create -R "$GITHUB_REPOSITORY" --title "Fork sync failed: $TAG" \
+            --body "Upstream \`$TAG\` merged cleanly into \`sync/nightly\`, but Fork CI or the promote step failed, so \`fork\` was not updated. Run: $RUN"
