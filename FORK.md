@@ -27,3 +27,8 @@ gh pr create -R pingdotgg/t3code --head abishop177-tech:fix/thing --base main
 ```
 
 To try the fix in the app first, merge it into a scratch branch off `fork` and run `vp run dev`.
+
+## Sync conflicts
+
+Ask an agent to use the `fork-sync-conflict` skill. It merges the newest nightly in a separate
+worktree, resolves and verifies it, and opens a PR into `fork` for you to review.
