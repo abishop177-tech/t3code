@@ -87,9 +87,13 @@ jobs:
       - run: vp run --filter '!@t3tools/web' --filter '!@t3tools/monorepo' test
 
   test_web:
-    name: Test Web
+    name: Test Web ${{ matrix.shard }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
@@ -101,4 +105,4 @@ jobs:
           sparse-checkout-cone-mode: false
       - uses: ./.github/actions/setup-ci-deps
       - run: node apps/web/node_modules/playwright/cli.js install --with-deps --only-shell chromium
-      - run: vp run --filter @t3tools/web test
+      - run: vp run --filter @t3tools/web test --shard ${{ matrix.shard }}/${{ strategy.job-total }}

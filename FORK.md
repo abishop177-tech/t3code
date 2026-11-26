@@ -1,10 +1,8 @@
 # Fork maintenance
 
-| Branch          | What it is                                                                                     |
-| --------------- | ---------------------------------------------------------------------------------------------- |
-| `fork`          | Default branch. Latest upstream nightly tag plus our changes. Build and run this.               |
-| `main`          | Exact mirror of `pingdotgg/t3code` main. Never commit here; cut upstream PR branches from it. |
-| `sync/nightly`  | Scratch branch the nightly sync tests before promoting to `fork`.                             |
+- `fork` is the default branch: the latest upstream nightly tag plus our changes. Build and run this.
+- `main` is an exact mirror of `pingdotgg/t3code` main. Never commit here; cut upstream PR branches from it.
+- `sync/nightly` is the scratch branch the nightly sync tests before promoting to `fork`.
 
 `Fork Sync` (`.github/workflows/fork-sync.yml`) runs daily: it mirrors `main`, merges the newest
 `v*-nightly.*` tag into `sync/nightly`, runs `Fork CI`, and fast-forwards `fork` if it passes. A merge
