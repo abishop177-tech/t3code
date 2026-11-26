@@ -1,0 +1,110 @@
+# Nightly upstream sync for this fork.
+#   main  - exact mirror of pingdotgg/t3code main; cut upstream PR branches from it.
+#   fork  - default branch: the latest upstream nightly tag plus our own changes.
+# The newest nightly tag is merged into `sync/nightly`, tested with Fork CI, and
+# fast-forwarded onto `fork` only when green. Conflicts or failures open an issue.
+#
+# FORK_SYNC_TOKEN: fine-grained PAT on this repo with Contents, Workflows, and
+# Issues read/write. GITHUB_TOKEN can't push upstream commits that touch
+# .github/workflows.
+name: Fork Sync
+
+on:
+  schedule:
+    - cron: "17 11 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fork-sync
+
+env:
+  UPSTREAM: https://github.com/pingdotgg/t3code.git
+
+jobs:
+  merge:
+    name: Merge latest nightly
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      tag: ${{ steps.merge.outputs.tag }}
+      sha: ${{ steps.merge.outputs.sha }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: fork
+          fetch-depth: 0
+          filter: blob:none
+          sparse-checkout: .github
+          token: ${{ secrets.FORK_SYNC_TOKEN }}
+
+      - name: Mirror upstream main
+        run: |
+          git remote add upstream "$UPSTREAM"
+          git fetch --no-tags upstream main
+          git push origin upstream/main:refs/heads/main
+
+      - name: Merge newest nightly tag
+        id: merge
+        env:
+          GH_TOKEN: ${{ secrets.FORK_SYNC_TOKEN }}
+        run: |
+          tag=$(git ls-remote --tags --refs upstream 'v*-nightly.*' | awk -F/ '{print $3}' | sort -V | tail -1)
+          git fetch --no-tags upstream tag "$tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if git merge-base --is-ancestor "$tag" HEAD; then
+            echo "fork already contains $tag"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git merge --no-edit -m "chore(fork): merge upstream $tag" "$tag"; then
+            files=$(git diff --name-only --diff-filter=U)
+            git merge --abort
+            body=$(printf 'Merging upstream `%s` into `fork` conflicts in:\n\n```\n%s\n```\n\nResolve locally:\n\n```sh\ngit switch fork && git pull\ngit fetch upstream tag %s\ngit merge %s\n```\n' "$tag" "$files" "$tag" "$tag")
+            gh issue create --title "Fork sync conflict: $tag" --body "$body"
+            exit 1
+          fi
+          git push --force origin HEAD:refs/heads/sync/nightly
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  test:
+    name: Test merge
+    needs: merge
+    if: needs.merge.outputs.sha != ''
+    uses: ./.github/workflows/fork-ci.yml
+    with:
+      ref: ${{ needs.merge.outputs.sha }}
+
+  promote:
+    name: Promote to fork
+    needs: [merge, test]
+    if: needs.merge.outputs.sha != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ needs.merge.outputs.sha }}
+          fetch-depth: 1
+          sparse-checkout: .github
+          token: ${{ secrets.FORK_SYNC_TOKEN }}
+      # Non-force: if someone pushed to fork mid-run, the next run merges again.
+      - run: git push origin HEAD:refs/heads/fork
+
+  report:
+    name: Report failure
+    needs: [merge, test, promote]
+    if: failure() && needs.merge.outputs.sha != ''
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.merge.outputs.tag }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh issue create -R "$GITHUB_REPOSITORY" --title "Fork sync failed CI: $TAG" \
+            --body "Upstream \`$TAG\` merged cleanly into \`sync/nightly\` but did not pass Fork CI, so \`fork\` was not updated. Run: $RUN"

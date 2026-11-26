@@ -1,0 +1,104 @@
+# CI for this fork. Upstream's ci.yml targets Blacksmith runners, which forks
+# can't use, so this runs the same checks on GitHub-hosted runners.
+#
+# Test an upstream-bound branch (cut from `main`, so it lacks this file):
+#   gh workflow run fork-ci.yml -f ref=fix/my-bug
+name: Fork CI
+
+on:
+  push:
+    branches: [fork]
+  pull_request:
+    branches: [fork]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch, tag, or SHA to test
+        required: true
+        default: fork
+  workflow_call:
+    inputs:
+      ref:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fork-ci-${{ inputs.ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ inputs.ref || '' }}
+          sparse-checkout: |
+            /*
+            !/.repos/
+            !/apps/mobile/modules/t3-terminal/Vendor/**/*.a
+          sparse-checkout-cone-mode: false
+      - uses: ./.github/actions/setup-ci-deps
+      - run: vp run --filter @t3tools/desktop ensure:electron
+      - run: vp run i18n:check
+      - run: vp check
+
+  build:
+    name: Build and Typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ inputs.ref || '' }}
+          sparse-checkout: |
+            /*
+            !/.repos/
+            !/apps/mobile/modules/t3-terminal/Vendor/**/*.a
+          sparse-checkout-cone-mode: false
+      - run: sudo apt-get update && sudo apt-get install -y libsecret-1-dev pkg-config
+      - uses: ./.github/actions/setup-ci-deps
+      - run: vp run --filter @t3tools/desktop ensure:electron
+      - run: vpr typecheck
+      - run: vp run build:desktop
+      - run: node apps/desktop/scripts/verify-preload-bundle.mjs
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ inputs.ref || '' }}
+          sparse-checkout: |
+            /*
+            !/.repos/
+            !/apps/mobile/modules/t3-terminal/Vendor/**/*.a
+          sparse-checkout-cone-mode: false
+      - run: sudo apt-get update && sudo apt-get install -y libsecret-1-dev pkg-config
+      - uses: ./.github/actions/setup-ci-deps
+      - run: vp run --filter @t3tools/desktop ensure:electron
+      - run: vp run --filter '!@t3tools/web' --filter '!@t3tools/monorepo' test
+
+  test_web:
+    name: Test Web
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ inputs.ref || '' }}
+          sparse-checkout: |
+            /*
+            !/.repos/
+            !/apps/mobile/modules/t3-terminal/Vendor/**/*.a
+          sparse-checkout-cone-mode: false
+      - uses: ./.github/actions/setup-ci-deps
+      - run: node apps/web/node_modules/playwright/cli.js install --with-deps --only-shell chromium
+      - run: vp run --filter @t3tools/web test
