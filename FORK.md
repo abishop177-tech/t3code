@@ -30,5 +30,5 @@ To try the fix in the app first, merge it into a scratch branch off `fork` and r
 
 ## Sync conflicts
 
-Ask an agent to use the `fork-sync-conflict` skill. It merges the newest nightly in a separate
+Ask an agent to use the `fix-t3-conflict` skill. It merges the newest nightly in a separate
 worktree, resolves and verifies it, and opens a PR into `fork` for you to review.

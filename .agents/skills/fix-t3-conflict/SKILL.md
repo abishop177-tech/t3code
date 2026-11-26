@@ -1,5 +1,5 @@
 ---
-name: fork-sync-conflict
+name: fix-t3-conflict
 description: Resolve a failed nightly upstream merge in the abishop177-tech/t3code fork and open a PR into the `fork` branch. Use when a "Fork sync conflict" issue is open, Fork Sync failed on a merge, or the user asks to pull a nightly into the fork by hand.
 ---
 
